@@ -1,0 +1,42 @@
+services:
+  - type: web
+    name: aion
+    runtime: node
+    plan: free
+    buildCommand: npm install && npx prisma generate && npx prisma db push && npm run build
+    startCommand: npm run start
+    envVars:
+      # Points at your existing Supabase database (same data you've already
+      # ingested) — set the full connection string manually in the Render
+      # dashboard. Do NOT use a `fromDatabase` block here; that provisions a
+      # brand-new, empty Render-managed Postgres instance instead.
+      - key: DATABASE_URL
+        sync: false
+      - key: AI_PROVIDER
+        value: gemini
+      - key: AI_MODEL
+        value: gemini-3.8-flash
+      - key: AI_API_KEY
+        sync: false # set manually in the Render dashboard — never commit real keys
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: CRON_SECRET
+        generateValue: true
+      - key: ADMIN_SECRET
+        generateValue: true
+      - key: SEARCH_PROVIDER
+        value: none
+      - key: GITHUB_TOKEN
+        sync: false
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: NEXT_PUBLIC_VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_SUBJECT
+        sync: false
+      - key: NEXT_PUBLIC_APP_URL
+        sync: false # set to your actual https://<service-name>.onrender.com URL after first deploy
+      - key: NODE_ENV
+        value: production

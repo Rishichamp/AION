@@ -1,0 +1,54 @@
+# --- Dependencies ---
+node_modules/
+.pnp
+.pnp.js
+
+# --- Next.js build output ---
+.next/
+out/
+build/
+dist/
+
+# --- Env files (never commit real secrets) ---
+.env
+.env.local
+.env.*.local
+# .env.example is intentionally NOT ignored — it's the template, meant to be committed
+
+# --- Prisma ---
+# node_modules/.prisma and node_modules/@prisma are already covered by node_modules/ above.
+# prisma/migrations/ is NOT ignored — migration files belong in git.
+
+# --- TypeScript / build caches ---
+*.tsbuildinfo
+.turbo/
+tsconfig.tsbuildinfo
+
+# --- Testing ---
+coverage/
+
+# --- Logs ---
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log
+
+# --- App-specific runtime files ---
+.aion-ai-usage.json
+
+# --- Editor / IDE ---
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# --- OS junk ---
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- Deployment ---
+.vercel
+
+# --- Misc ---
+*.pem
+.cache/

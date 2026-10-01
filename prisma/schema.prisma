@@ -1,0 +1,427 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------- USER ----------
+
+model User {
+  id     String  @id @default(cuid())
+  email  String? @unique
+  isDemo Boolean @default(false)
+  createdAt DateTime @default(now())
+
+  firstVisitAt         DateTime  @default(now())
+  lastVisitAt          DateTime  @default(now())
+  lastRadarRequestAt   DateTime?
+  lastRadarGeneratedAt DateTime?
+  // Set for the duration of an in-flight generateRadarBriefing() call, cleared
+  // on completion/failure — a simple DB-row mutex so two near-simultaneous
+  // "Run Radar" calls (e.g. phone + laptop) can't both advance the checkpoint.
+  // See lib/radar/generate.ts.
+  radarGeneratingSince DateTime?
+  // Ownership token for the lock above — without this, a request that was
+  // stale-takeover'd by a newer one could still release the NEW owner's
+  // lock when it eventually finishes (timestamp alone can't distinguish
+  // "my lock" from "someone else's lock that happens to exist right now").
+  // See acquireRadarLock/releaseRadarLock in lib/radar/checkpoint.ts.
+  radarLockToken       String?
+  // IANA timezone (e.g. "America/New_York"), used only for per-user daily
+  // notification scheduling — see lib/timezone.ts and /api/push/send.
+  timezone             String    @default("UTC")
+  lastDailyNotificationAt DateTime?
+
+  interests   UserInterest[]
+  readHistory UserReadHistory[]
+  bookmarks   Bookmark[]
+  radarBriefs RadarBrief[]
+  dailyBriefReads DailyBriefRead[]
+  notifPrefs  NotificationPreference?
+  pushSubs    PushSubscription[]
+  searches    SearchLog[]
+  feedback    ContentFeedback[]
+  focus       UserFocus?
+}
+
+model UserInterest {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  topic  String
+  weight Float  @default(1.0)
+
+  @@unique([userId, topic])
+}
+
+model NotificationPreference {
+  id                String  @id @default(cuid())
+  userId            String  @unique
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dailyBriefEnabled Boolean @default(false)
+  dailyBriefTime    String  @default("08:00")
+  importantAlerts   Boolean @default(false)
+}
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+}
+
+model SearchLog {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  query     String
+  createdAt DateTime @default(now())
+}
+
+// ---------- SOURCES ----------
+
+enum SourceKind {
+  ARXIV
+  SEMANTIC_SCHOLAR
+  OPENALEX
+  HUGGINGFACE
+  LAB_BLOG
+  GITHUB
+  RSS_NEWS
+}
+
+model Source {
+  id       String     @id @default(cuid())
+  name     String     @unique
+  kind     SourceKind
+  endpoint String
+  enabled  Boolean    @default(true)
+  category String?
+
+  ingestionRuns IngestionRun[]
+  articles      Article[]
+  papers        ResearchPaper[]
+  models        ModelRelease[]
+  projects      OpenSourceProject[]
+}
+
+model IngestionRun {
+  id          String   @id @default(cuid())
+  sourceId    String
+  source      Source   @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  startedAt   DateTime @default(now())
+  finishedAt  DateTime?
+  status      String   @default("running") // running | success | failed
+  itemsFound  Int      @default(0)
+  itemsStored Int      @default(0)
+  error       String?
+}
+
+// ---------- CONTENT ----------
+
+model Topic {
+  id    String @id @default(cuid())
+  slug  String @unique
+  name  String
+
+  articles Article[] @relation("ArticleTopics")
+  papers   ResearchPaper[] @relation("PaperTopics")
+  models   ModelRelease[] @relation("ModelTopics")
+  projects OpenSourceProject[] @relation("ProjectTopics")
+}
+
+model Tag {
+  id   String @id @default(cuid())
+  name String @unique
+
+  articles Article[] @relation("ArticleTags")
+  papers   ResearchPaper[] @relation("PaperTags")
+}
+
+model Article {
+  id            String   @id @default(cuid())
+  sourceId      String
+  source        Source   @relation(fields: [sourceId], references: [id])
+  title         String
+  url           String   @unique
+  canonicalUrl  String?
+  author        String?
+  // Null means "publication date unknown" (e.g. a web-search fallback result
+  // whose real publish date isn't reliably parseable) — NEVER defaulted to
+  // now(). `createdAt` below is the discoveredAt equivalent: when AION found
+  // it, which is a different fact from when it was published.
+  publishedAt   DateTime?
+  contentType   String   @default("news") // news | announcement | lab_post
+  description   String?  @db.Text
+  aiSummary     String?  @db.Text
+  keyPoint      String?  @db.Text
+  importance    Float    @default(0)
+  relevance     Float    @default(0)
+  category      String?  // research | models | companies | opensource | agents | reasoning | multimodal | robotics | safety | infrastructure
+  isDuplicateOf String?
+  // Provenance: a search-fallback result must not become indistinguishable
+  // from scheduled ingestion data. "INGESTION" (default) = came from a
+  // normal scheduled connector run; "SEARCH_FALLBACK" = surfaced on-demand
+  // by a specific user query (see lib/search/fallback.ts) — still useful
+  // and still DB-first for the next identical query, but explicitly marked
+  // as opportunistic rather than the canonical, comprehensively-collected
+  // dataset ingestion represents.
+  origin        String   @default("INGESTION")
+  createdAt     DateTime @default(now()) // == discoveredAt
+  updatedAt     DateTime @updatedAt
+
+  topics    Topic[] @relation("ArticleTopics")
+  tags      Tag[]   @relation("ArticleTags")
+  bookmarks Bookmark[]
+  reads     UserReadHistory[]
+  radarItems RadarItem[]
+
+  @@index([publishedAt])
+  @@index([createdAt])
+  @@index([importance])
+}
+
+model ResearchPaper {
+  id          String   @id @default(cuid())
+  sourceId    String
+  source      Source   @relation(fields: [sourceId], references: [id])
+  title       String
+  url         String   @unique
+  pdfUrl      String?
+  arxivId     String?  @unique
+  doi         String?  @unique
+  authors     String[] // stored as text array
+  abstract    String?  @db.Text
+  aiSummary   String?  @db.Text
+  keyContribution String? @db.Text
+  categories  String[]
+  // Null means "publication date genuinely unknown" — never fabricated as
+  // now(). createdAt below is the discoveredAt equivalent. See the matching
+  // comment on Article.publishedAt.
+  publishedAt DateTime?
+  importance  Float    @default(0)
+  relevance   Float    @default(0)
+  novelty     Float    @default(0)
+  isDuplicateOf String?
+  // See the matching field/comment on Article — same provenance principle.
+  origin      String   @default("INGESTION")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  topics    Topic[] @relation("PaperTopics")
+  tags      Tag[]   @relation("PaperTags")
+  bookmarks Bookmark[]
+  reads     UserReadHistory[]
+  radarItems RadarItem[]
+
+  @@index([publishedAt])
+  @@index([importance])
+}
+
+model ModelRelease {
+  id             String   @id @default(cuid())
+  sourceId       String
+  source         Source   @relation(fields: [sourceId], references: [id])
+  name           String
+  organization   String
+  releaseDate    DateTime
+  modelType      String? // text | multimodal | audio | video | embedding ...
+  capabilities   String[] @default([])
+  contextLength  Int?
+  announcementUrl String  @unique
+  relatedPaperUrl String?
+  description    String?  @db.Text
+  importance     Float    @default(0)
+  createdAt      DateTime @default(now())
+
+  topics Topic[] @relation("ModelTopics")
+  bookmarks Bookmark[]
+  reads UserReadHistory[]
+  radarItems RadarItem[]
+
+  @@index([releaseDate])
+}
+
+model OpenSourceProject {
+  id           String   @id @default(cuid())
+  sourceId     String
+  source       Source   @relation(fields: [sourceId], references: [id])
+  name         String
+  organization String?
+  repoUrl      String   @unique
+  description  String?  @db.Text
+  stars        Int?
+  lastActivityAt DateTime?
+  whyItMatters String?  @db.Text
+  importance   Float    @default(0)
+  createdAt    DateTime @default(now())
+
+  topics Topic[] @relation("ProjectTopics")
+  bookmarks Bookmark[]
+  reads UserReadHistory[]
+  radarItems RadarItem[]
+
+  @@index([lastActivityAt])
+}
+
+// ---------- USER ACTIVITY ----------
+
+model Bookmark {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  // Always populated (e.g. "article:ckx1a2...") — computed app-side from
+  // whichever of the four FK fields below is set. Exists specifically for
+  // DB-level idempotency: a compound `@@unique` directly across
+  // articleId/paperId/modelId/projectId would NOT work, since Postgres
+  // treats NULL as distinct from NULL in a unique index, so two rows that
+  // are both "articleId=X, the other three null" would NOT collide. This
+  // single always-non-null column does the job correctly and lets POST use
+  // a genuine upsert instead of a check-then-insert race.
+  contentKey String
+
+  articleId String?
+  article   Article? @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  paperId   String?
+  paper     ResearchPaper? @relation(fields: [paperId], references: [id], onDelete: Cascade)
+  modelId   String?
+  model     ModelRelease? @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  projectId String?
+  project   OpenSourceProject? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, contentKey])
+}
+
+model UserReadHistory {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  readAt    DateTime @default(now())
+
+  articleId String?
+  article   Article? @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  paperId   String?
+  paper     ResearchPaper? @relation(fields: [paperId], references: [id], onDelete: Cascade)
+  modelId   String?
+  model     ModelRelease? @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  projectId String?
+  project   OpenSourceProject? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+// ---------- RADAR (temporal "since last check" engine) ----------
+
+model RadarBrief {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  checkpointFrom DateTime
+  checkpointTo   DateTime
+  summary        String   @db.Text
+  createdAt      DateTime @default(now())
+
+  items RadarItem[]
+
+  // Idempotency guard: two near-simultaneous "Run Radar" calls resolving to
+  // the same window collide here instead of creating duplicate briefs — see
+  // the P2002 handling in lib/radar/generate.ts.
+  @@unique([userId, checkpointFrom, checkpointTo])
+}
+
+model RadarItem {
+  id       String @id @default(cuid())
+  briefId  String
+  brief    RadarBrief @relation(fields: [briefId], references: [id], onDelete: Cascade)
+  kind     String // "development" | "recommendation"
+  rank     Int
+  reason   String? @db.Text // "why it matters" / "why you should read it"
+
+  articleId String?
+  article   Article? @relation(fields: [articleId], references: [id])
+  paperId   String?
+  paper     ResearchPaper? @relation(fields: [paperId], references: [id])
+  modelId   String?
+  model     ModelRelease? @relation(fields: [modelId], references: [id])
+  projectId String?
+  project   OpenSourceProject? @relation(fields: [projectId], references: [id])
+}
+
+model DailyBrief {
+  id        String   @id @default(cuid())
+  date      DateTime @unique @db.Date
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+
+  reads DailyBriefRead[]
+}
+
+model DailyBriefRead {
+  id           String     @id @default(cuid())
+  userId       String
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dailyBriefId String
+  dailyBrief   DailyBrief @relation(fields: [dailyBriefId], references: [id], onDelete: Cascade)
+  readAt       DateTime   @default(now())
+
+  @@unique([userId, dailyBriefId])
+}
+
+// ---------- SEARCH FALLBACK CACHE ----------
+
+// Caches the *query itself* (not just the resulting Article rows) so an
+// identical topic/search query within the TTL never re-hits the web search
+// API — see lib/search/fallback.ts.
+model SearchCache {
+  id              String   @id @default(cuid())
+  queryHash       String   @unique
+  normalizedQuery String
+  provider        String
+  results         Json
+  createdAt       DateTime @default(now())
+  expiresAt       DateTime
+
+  @@index([expiresAt])
+}
+
+// ---------- PERSONALIZATION (feedback + "what I'm looking for") ----------
+
+// One row per (user, item). "NOT_INTERESTED" hides the item everywhere and
+// softly down-ranks its topics/source/near-duplicate titles; "MORE_LIKE_THIS"
+// boosts its topics. contentKey uses the same "paper:<id>" format as
+// Bookmark.contentKey. Topic/source/title are SNAPSHOTS taken at feedback
+// time, so learning keeps working even if the item is later re-ingested.
+model ContentFeedback {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contentKey String
+  kind       String   // NOT_INTERESTED | MORE_LIKE_THIS
+  reason     String?  // off_topic | seen_it | too_basic | wrong_source | other
+  title      String?  @db.Text
+  topicNames String[] @default([])
+  sourceName String?
+  createdAt  DateTime @default(now())
+
+  @@unique([userId, contentKey])
+  @@index([userId, kind])
+}
+
+// The person's standing "request": free text describing what they want to
+// see (used like a persistent search query to boost matching items), plus
+// things they never want to see.
+model UserFocus {
+  id            String   @id @default(cuid())
+  userId        String   @unique
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  request       String   @default("") @db.Text
+  mutedKeywords String[] @default([])
+  mutedSources  String[] @default([])
+  updatedAt     DateTime @updatedAt
+}

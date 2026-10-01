@@ -1,0 +1,155 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ---------- Theme tokens ---------- */
+/* Values are "R G B" triples (no rgb() wrapper) so Tailwind's <alpha-value>
+   opacity modifiers work, e.g. bg-surface/60. */
+
+:root,
+.light {
+  color-scheme: light;
+  --bg: 250 248 244;              /* warm paper, not stark white */
+  --surface: 255 255 255;
+  --surface-hover: 243 240 234;
+  --surface-raised: 255 255 255;
+  --border: 231 226 216;
+  --border-strong: 216 209 194;
+  --text: 26 34 51;
+  --text-muted: 92 100 120;
+  --text-faint: 105 113 133;      /* 4.88:1 on white — was 3.05:1, failed AA */
+  --signal: 232 163 61;           /* vivid amber — decorative use (icons, fills, buttons) */
+  --signal-text: 150 80 10;       /* 6.09:1 on white — separate darker value for signal used AS TEXT */
+  --signal-soft: 120 64 8;        /* hover state: deepens further (8.28:1) — lightening here would regress contrast */
+  --blip: 12 122 110;             /* deeper teal for the same reason */
+  --blip-soft: 61 158 146;
+}
+
+.dark {
+  color-scheme: dark;
+  --bg: 11 18 32;
+  --surface: 19 27 46;
+  --surface-hover: 27 39 64;
+  --surface-raised: 24 33 56;
+  --border: 27 39 64;
+  --border-strong: 42 56 86;
+  --text: 231 233 238;
+  --text-muted: 139 148 167;
+  --text-faint: 90 100 120;
+  --signal: 232 163 61;
+  --signal-text: 232 163 61;      /* already 8.68:1 on dark bg — no separate value needed */
+  --signal-soft: 242 200 119;
+  --blip: 79 209 197;
+  --blip-soft: 154 232 224;
+}
+
+html {
+  background-color: rgb(var(--bg));
+}
+
+body {
+  @apply bg-bg text-text font-body antialiased;
+}
+
+/* Smooth theme cross-fade, scoped to the three cheapest-to-animate
+   properties. Box-shadow/fill/stroke are deliberately excluded here — they're
+   expensive to repaint at scale (e.g. a 30-card grid), so those are opted
+   into per-element via `.transition-theme`/`.hover-lift` instead of forced
+   onto every node on the page. */
+*, *::before, *::after {
+  transition-property: background-color, border-color, color;
+  transition-duration: 250ms;
+  transition-timing-function: ease;
+}
+
+::selection {
+  background-color: rgb(var(--signal) / 0.3);
+  color: rgb(var(--text));
+}
+
+:focus-visible {
+  outline: 2px solid rgb(var(--signal-text));
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* Radar hero sweep — only animates while a scan is actively running. */
+@keyframes sweep {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.radar-sweep {
+  animation: sweep 2.2s linear infinite;
+  transform-origin: center;
+}
+
+/* Subtle lift used by cards on hover — part of the "premium" feel, kept as a
+   utility class so it's consistent everywhere instead of ad hoc per-component. */
+.hover-lift {
+  transition-property: transform, background-color, border-color, color, box-shadow, fill, stroke;
+  transition-duration: 220ms;
+  transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
+.hover-lift:hover {
+  transform: translateY(-2px);
+}
+
+/* ---------- Landing/premium animation system ---------- */
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.reveal {
+  opacity: 0;
+  transform: translateY(14px);
+}
+.reveal.reveal-in {
+  animation: fadeInUp 620ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes floatSlow {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(2%, -3%) scale(1.05); }
+}
+.blob {
+  animation: floatSlow 14s ease-in-out infinite;
+  filter: blur(60px);
+}
+.blob-delay {
+  animation-delay: -6s;
+}
+
+@keyframes ambientSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.radar-idle {
+  animation: ambientSpin 40s linear infinite;
+  transform-origin: center;
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, rgb(var(--surface)) 25%, rgb(var(--surface-hover)) 50%, rgb(var(--surface)) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.6s ease-in-out infinite;
+}
+
+@keyframes pillPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+.pulse-dot {
+  animation: pillPulse 2.2s ease-in-out infinite;
+}
