@@ -1,5 +1,13 @@
 # AION — AI Intelligence & Observation Network
 
+![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)
+![Next.js](https://img.shields.io/badge/Next.js_14-000000?logo=nextdotjs&logoColor=white)
+![Prisma](https://img.shields.io/badge/Prisma-2D3748?logo=prisma&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?logo=postgresql&logoColor=white)
+![Tailwind](https://img.shields.io/badge/Tailwind_CSS-06B6D4?logo=tailwindcss&logoColor=white)
+![PWA](https://img.shields.io/badge/PWA-5A0FC8?logo=pwa&logoColor=white)
+![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
+
 Your personal AI research & intelligence radar. AION continuously ingests AI
 news, papers, model releases, and open-source activity into a database, then
 answers one question well: **"What changed since I last checked, and what
@@ -9,7 +17,24 @@ It never crawls the internet live on a user request — ingestion runs on a
 schedule, and the app queries the processed database (see `src/lib/ingestion`
 and `src/lib/radar`).
 
+## Features
+
+- **Radar** — a single "what changed since you last looked" briefing, ranked
+  by importance, recency, and your interests, with an AI-generated summary
+  (and a deterministic ranked fallback when the AI provider is unavailable).
+- **Research, News, Models, Open Source** — four content types, ingested from
+  arXiv, OpenAlex, lab RSS feeds, Hugging Face, and GitHub, each with
+  topic/source filter pills.
+- **Personalization** — "Not interested" / "More like this" feedback that
+  reshapes ranking everywhere (not just the page you clicked on), plus a
+  free-text "what are you looking for" field that acts like a standing
+  search query.
+- **Ask AION** — natural-language questions answered from the ingested
+  database, with a web-search fallback when the database has no answer.
+- **PWA** — installable, with web push notifications for new Radar briefs.
+
 ## Tech stack
+
 
 Next.js (App Router) + TypeScript + Tailwind, PostgreSQL + Prisma, a
 provider-agnostic AI layer (`src/lib/ai/client.ts`), Web Push, and a PWA shell
