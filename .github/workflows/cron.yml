@@ -1,0 +1,74 @@
+name: AION scheduled jobs
+
+# Render's free tier has no cron jobs, so GitHub Actions calls the app's
+# /api/cron/* routes on a schedule. Times are UTC (IST = UTC+5:30).
+on:
+  schedule:
+    - cron: "0 */6 * * *"    # news          every 6 hours
+    - cron: "15 1 * * *"     # research      daily 06:45 IST
+    - cron: "30 1 * * *"     # models        daily 07:00 IST
+    - cron: "45 1 * * *"     # open source   daily 07:15 IST
+    - cron: "30 2 * * *"     # daily brief   daily 08:00 IST (after ingestion)
+  workflow_dispatch:
+    inputs:
+      job:
+        description: "Which job to run"
+        required: true
+        default: ingest-news
+        type: choice
+        options:
+          - ingest-news
+          - ingest-research
+          - ingest-models
+          - ingest-opensource
+          - daily-brief
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Pick endpoint
+        id: pick
+        env:
+          SCHEDULE: ${{ github.event.schedule }}
+          INPUT_JOB: ${{ github.event.inputs.job }}
+        run: |
+          if [ -n "$INPUT_JOB" ]; then
+            JOB="$INPUT_JOB"
+          else
+            case "$SCHEDULE" in
+              "0 */6 * * *") JOB="ingest-news" ;;
+              "15 1 * * *")  JOB="ingest-research" ;;
+              "30 1 * * *")  JOB="ingest-models" ;;
+              "45 1 * * *")  JOB="ingest-opensource" ;;
+              "30 2 * * *")  JOB="daily-brief" ;;
+              *) echo "Unknown schedule: $SCHEDULE"; exit 1 ;;
+            esac
+          fi
+          echo "job=$JOB" >> "$GITHUB_OUTPUT"
+          echo "Running $JOB"
+
+      - name: Wake the service (free instances spin down)
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+        run: |
+          curl -sS -o /dev/null --max-time 120 --retry 3 --retry-delay 10 --retry-all-errors "$APP_URL/" || true
+
+      - name: Call cron endpoint
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          JOB: ${{ steps.pick.outputs.job }}
+        run: |
+          STATUS=$(curl -sS -o response.txt -w "%{http_code}" \
+            --max-time 600 --retry 2 --retry-delay 15 \
+            -X POST "$APP_URL/api/cron/$JOB" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H "x-cron-secret: $CRON_SECRET")
+          echo "HTTP $STATUS"
+          head -c 2000 response.txt
+          echo
+          if [ "$STATUS" -lt 200 ] || [ "$STATUS" -ge 300 ]; then
+            exit 1
+          fi
