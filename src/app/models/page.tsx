@@ -19,7 +19,8 @@ function humanize(tag: string): string {
   return tag.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-export default async function ModelsPage({ searchParams }: { searchParams: { type?: string } }) {
+export default async function ModelsPage({ searchParams: searchParamsPromise }: { searchParams: Promise<{ type?: string }> }) {
+  const searchParams = await searchParamsPromise; // a Promise in Next 15
   const user = await getCurrentUser();
   const [signals, focus, explicitInterests, { modelIds }, typeCounts] = await Promise.all([
     getPersonalizationSignals(user.id),

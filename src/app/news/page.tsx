@@ -28,7 +28,8 @@ const SHORT_LABEL: Record<string, string> = {
   "Hugging Face Blog": "Hugging Face"
 };
 
-export default async function NewsPage({ searchParams }: { searchParams: { source?: string } }) {
+export default async function NewsPage({ searchParams: searchParamsPromise }: { searchParams: Promise<{ source?: string }> }) {
+  const searchParams = await searchParamsPromise; // a Promise in Next 15
   const user = await getCurrentUser();
   const [signals, focus, explicitInterests, behavioralBoost, { articleIds }, sourceCounts] = await Promise.all([
     getPersonalizationSignals(user.id),

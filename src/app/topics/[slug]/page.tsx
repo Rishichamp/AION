@@ -4,11 +4,12 @@ import { getBookmarkedIds } from "@/lib/bookmarks";
 import { ContentCard } from "@/components/ContentCard";
 import { getPersonalizationSignals, excludeClause } from "@/lib/personalize/feedback";
 
-export default async function TopicPage({ params }: { params: { slug: string } }) {
+export default async function TopicPage({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params; // a Promise in Next 15
   const user = await getCurrentUser();
   const [signals, topic, bookmarked] = await Promise.all([
     getPersonalizationSignals(user.id),
-    db.topic.findUnique({ where: { slug: params.slug } }),
+    db.topic.findUnique({ where: { slug } }),
     getBookmarkedIds(user.id)
   ]);
 
@@ -26,22 +27,22 @@ export default async function TopicPage({ params }: { params: { slug: string } }
   // "not interested" items — a relation `include` has no per-user filter.
   const [papers, articles, models, projects] = await Promise.all([
     db.researchPaper.findMany({
-      where: { topics: { some: { slug: params.slug } }, id: { notIn: excludeClause(signals.hiddenIds.paperIds) } },
+      where: { topics: { some: { slug: slug } }, id: { notIn: excludeClause(signals.hiddenIds.paperIds) } },
       orderBy: { publishedAt: "desc" },
       take: 10
     }),
     db.article.findMany({
-      where: { topics: { some: { slug: params.slug } }, id: { notIn: excludeClause(signals.hiddenIds.articleIds) } },
+      where: { topics: { some: { slug: slug } }, id: { notIn: excludeClause(signals.hiddenIds.articleIds) } },
       orderBy: { publishedAt: "desc" },
       take: 10
     }),
     db.modelRelease.findMany({
-      where: { topics: { some: { slug: params.slug } }, id: { notIn: excludeClause(signals.hiddenIds.modelIds) } },
+      where: { topics: { some: { slug: slug } }, id: { notIn: excludeClause(signals.hiddenIds.modelIds) } },
       orderBy: { releaseDate: "desc" },
       take: 10
     }),
     db.openSourceProject.findMany({
-      where: { topics: { some: { slug: params.slug } }, id: { notIn: excludeClause(signals.hiddenIds.projectIds) } },
+      where: { topics: { some: { slug: slug } }, id: { notIn: excludeClause(signals.hiddenIds.projectIds) } },
       orderBy: { lastActivityAt: "desc" },
       take: 10
     })

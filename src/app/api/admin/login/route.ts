@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { safeEqual } from "@/lib/cron-auth";
 
 const bodySchema = z.object({ secret: z.string().min(1) });
 
@@ -11,11 +12,11 @@ const SESSION_MAX_AGE_SECONDS = 60 * 60 * 4; // 4 hours — short-lived, dev/adm
 // POST body and the resulting httpOnly cookie do not. Still explicitly
 // development/admin-only (see README) — this is not a general auth system.
 export async function POST(req: Request) {
-  const parsed = bodySchema.safeParse(await req.json());
+  const parsed = bodySchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "secret required" }, { status: 400 });
 
   const adminSecret = process.env.ADMIN_SECRET;
-  if (!adminSecret || parsed.data.secret !== adminSecret) {
+  if (!adminSecret || !safeEqual(parsed.data.secret, adminSecret)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

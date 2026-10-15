@@ -13,10 +13,12 @@
  * never mean "open to everyone". This is a development/admin-only
  * mechanism, not a general auth system — see README.
  */
+import { safeEqual } from "@/lib/cron-auth";
+
 export function isAdminAuthorized(opts: { bearer?: string | null; cookie?: string | null }): boolean {
   const secret = process.env.ADMIN_SECRET;
   if (!secret) return false;
-  if (opts.bearer === `Bearer ${secret}`) return true;
-  if (opts.cookie === secret) return true;
+  if (opts.bearer && safeEqual(opts.bearer, `Bearer ${secret}`)) return true;
+  if (opts.cookie && safeEqual(opts.cookie, secret)) return true;
   return false;
 }

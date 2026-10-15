@@ -18,7 +18,8 @@ const PAGE_SIZE = 30;
 // return first.
 const POOL_SIZE = 90;
 
-export default async function ResearchPage({ searchParams }: { searchParams: { topic?: string } }) {
+export default async function ResearchPage({ searchParams: searchParamsPromise }: { searchParams: Promise<{ topic?: string }> }) {
+  const searchParams = await searchParamsPromise; // a Promise in Next 15
   const user = await getCurrentUser();
   const [signals, focus, explicitInterests, behavioralBoost, { paperIds }] = await Promise.all([
     getPersonalizationSignals(user.id),

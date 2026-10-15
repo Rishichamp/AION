@@ -1,5 +1,5 @@
 import { cookies } from "next/headers";
-import { createHmac, timingSafeEqual } from "crypto";
+import { createHmac, randomBytes, timingSafeEqual } from "crypto";
 import { db } from "@/lib/db";
 
 // AION ships with a single "demo" account by default so it runs locally with
@@ -16,9 +16,22 @@ import { db } from "@/lib/db";
 
 const SESSION_COOKIE = "aion_session";
 
+let productionFallbackSecret: string | null = null;
+
 function getSessionSecret(): string {
   const secret = process.env.SESSION_SECRET;
   if (!secret) {
+    if (process.env.NODE_ENV === "production") {
+      // The dev fallback below is public (it's in this file), so in
+      // production anyone could sign a session with it. Use a random
+      // per-process secret instead: sessions reset on restart, but can't
+      // be forged.
+      if (!productionFallbackSecret) {
+        console.warn("[auth] SESSION_SECRET is not set — using a random per-process secret. Set it in the environment.");
+        productionFallbackSecret = randomBytes(32).toString("hex");
+      }
+      return productionFallbackSecret;
+    }
     console.warn(
       "[auth] SESSION_SECRET is not set — falling back to an insecure default. Fine for local dev, never for a real deployment. See .env.example."
     );
@@ -47,7 +60,7 @@ export function verify(cookieValue: string | undefined): string | null {
 }
 
 export async function getCurrentUser() {
-  const jar = cookies();
+  const jar = await cookies(); // async in Next 15
   const userId = verify(jar.get(SESSION_COOKIE)?.value);
 
   if (userId) {

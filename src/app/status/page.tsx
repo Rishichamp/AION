@@ -22,7 +22,7 @@ const STATUS_LABEL: Record<string, string> = {
 // "why didn't AION show today's update from source X" without digging
 // through logs. See README's source-health notes.
 export default async function StatusPage() {
-  const sessionCookie = cookies().get("aion_admin_session")?.value;
+  const sessionCookie = (await cookies()).get("aion_admin_session")?.value;
   if (!isAdminAuthorized({ cookie: sessionCookie })) {
     return (
       <div className="px-5 py-8 md:px-10 md:py-12">

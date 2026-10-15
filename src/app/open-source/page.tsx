@@ -13,7 +13,8 @@ import { getBehavioralTopicBoost, mergeInterestSignals } from "@/lib/radar/behav
 const PAGE_SIZE = 30;
 const POOL_SIZE = 90;
 
-export default async function OpenSourcePage({ searchParams }: { searchParams: { topic?: string } }) {
+export default async function OpenSourcePage({ searchParams: searchParamsPromise }: { searchParams: Promise<{ topic?: string }> }) {
+  const searchParams = await searchParamsPromise; // a Promise in Next 15
   const user = await getCurrentUser();
   const [signals, focus, explicitInterests, behavioralBoost, { projectIds }] = await Promise.all([
     getPersonalizationSignals(user.id),

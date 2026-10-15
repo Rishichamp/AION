@@ -1,4 +1,11 @@
 import { NextRequest } from "next/server";
+import { timingSafeEqual } from "crypto";
+
+export function safeEqual(a: string, b: string): boolean {
+  const x = Buffer.from(a);
+  const y = Buffer.from(b);
+  return x.length === y.length && timingSafeEqual(x, y);
+}
 
 /** Every /api/cron/* route calls this first. Point your host's scheduler
  *  (Vercel Cron, GitHub Actions, a plain crontab + curl, etc.) at these
@@ -6,7 +13,7 @@ import { NextRequest } from "next/server";
 export function assertCronAuthorized(req: NextRequest) {
   const secret = process.env.CRON_SECRET;
   const header = req.headers.get("authorization");
-  if (!secret || header !== `Bearer ${secret}`) {
+  if (!secret || !safeEqual(header ?? "", `Bearer ${secret}`)) {
     throw new CronAuthError();
   }
 }
