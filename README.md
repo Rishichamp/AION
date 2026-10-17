@@ -35,7 +35,6 @@ and `src/lib/radar`).
 
 ## Tech stack
 
-
 Next.js (App Router) + TypeScript + Tailwind, PostgreSQL + Prisma, a
 provider-agnostic AI layer (`src/lib/ai/client.ts`), Web Push, and a PWA shell
 (manifest + service worker).
@@ -289,6 +288,7 @@ environment — see "Known limitations" for what that would cover and why.
 ## Known limitations
 
 Corrected in this pass:
+
 - The Radar lock's stale-takeover recovery had a real race: if request A ran
   long enough to be stale-takeover'd by B, A's eventual `releaseRadarLock()`
   call would clear B's lock too (timestamp-only locks can't distinguish "a
@@ -338,6 +338,7 @@ Corrected in this pass:
   HMAC-signed and verified; also added the `secure` flag for production.
 
 Still open:
+
 - Auth is still the single demo-user abstraction (`getCurrentUser()`) —
   every other part of the app already depends only on that function, so
   swapping in real multi-device auth is a one-file change, but it hasn't
@@ -374,6 +375,7 @@ Still open:
 
 Worth calling out specifically, since it's the clearest evidence the testing
 investment is paying for itself rather than being busywork:
+
 1. The backlog's `Math.min`/`Math.max` lookback-bound bug above — found
    while writing the "bounds the backlog window" test.
 2. The Zod `.default()`-on-every-field schema flaw above — found while
